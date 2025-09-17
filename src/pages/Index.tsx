@@ -2,46 +2,40 @@ import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import PassRequestForm from "@/components/PassRequestForm";
 import PassCard from "@/components/PassCard";
 import QRDisplay from "@/components/QRDisplay";
 import QRScanner from "@/components/QRScanner";
 import { Pass, PassFormData } from "@/types/Pass";
-import { FileText, Scan, ClipboardList, Shield } from "lucide-react";
+import { FileText, Scan, ClipboardList, Shield, Settings } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 
-const Index = () => {
-  const [passes, setPasses] = useState<Pass[]>([]);
+interface IndexProps {
+  passes: Pass[];
+  onPassSubmission: (formData: PassFormData) => Pass;
+}
+
+const Index = ({ passes, onPassSubmission }: IndexProps) => {
   const [selectedPass, setSelectedPass] = useState<Pass | null>(null);
+  const navigate = useNavigate();
 
   const handlePassSubmission = (formData: PassFormData) => {
-    const newPass: Pass = {
-      id: `PASS-${Date.now()}`,
-      ...formData,
-      status: 'pending',
-      createdAt: new Date(),
-    };
-
-    setPasses(prev => [newPass, ...prev]);
+    const newPass = onPassSubmission(formData);
     
-    // Simulate approval process
+    toast({
+      title: "Pass Submitted",
+      description: "Your curfew pass request has been submitted for review.",
+    });
+    
+    // Simulate approval notification
     setTimeout(() => {
-      setPasses(prev => prev.map(p => 
-        p.id === newPass.id 
-          ? { ...p, status: 'approved', approvedAt: new Date() }
-          : p
-      ));
-      
       toast({
         title: "Pass Approved!",
         description: "Your curfew pass has been approved and is ready to use.",
       });
     }, 3000);
-
-    toast({
-      title: "Pass Submitted",
-      description: "Your curfew pass request has been submitted for review.",
-    });
   };
 
   const getPassStats = () => {
@@ -59,12 +53,23 @@ const Index = () => {
       {/* Header */}
       <header className="bg-gradient-to-r from-primary to-accent text-primary-foreground shadow-lg">
         <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center gap-3">
-            <Shield className="h-8 w-8" />
-            <div>
-              <h1 className="text-3xl font-bold">E-Curfew Pass System</h1>
-              <p className="text-primary-foreground/90">Digital Authorization & Verification Platform</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Shield className="h-8 w-8" />
+              <div>
+                <h1 className="text-3xl font-bold">E-Curfew Pass System</h1>
+                <p className="text-primary-foreground/90">Digital Authorization & Verification Platform</p>
+              </div>
             </div>
+            
+            <Button
+              variant="secondary"
+              onClick={() => navigate("/admin")}
+              className="bg-primary-foreground text-primary hover:bg-primary-foreground/90"
+            >
+              <Settings className="h-4 w-4 mr-2" />
+              Admin Panel
+            </Button>
           </div>
         </div>
       </header>

@@ -8,34 +8,41 @@ import PassCard from "@/components/PassCard";
 import QRDisplay from "@/components/QRDisplay";
 import QRScanner from "@/components/QRScanner";
 import { Pass, PassFormData } from "@/types/Pass";
-import { FileText, Scan, ClipboardList, Shield, Settings } from "lucide-react";
+import { FileText, Scan, ClipboardList, Shield, Settings, LogOut } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { usePasses } from "@/hooks/usePasses";
 
-interface IndexProps {
-  passes: Pass[];
-  onPassSubmission: (formData: PassFormData) => Pass;
-}
-
-const Index = ({ passes, onPassSubmission }: IndexProps) => {
+const Index = () => {
   const [selectedPass, setSelectedPass] = useState<Pass | null>(null);
   const navigate = useNavigate();
+  const { user, profile, signOut } = useAuth();
+  const { passes, loading, createPass } = usePasses();
 
-  const handlePassSubmission = (formData: PassFormData) => {
-    const newPass = onPassSubmission(formData);
+  const handlePassSubmission = async (formData: PassFormData) => {
+    const newPass = await createPass(formData);
     
-    toast({
-      title: "Pass Submitted",
-      description: "Your curfew pass request has been submitted for review.",
-    });
-    
-    // Simulate approval notification
-    setTimeout(() => {
+    if (newPass) {
       toast({
-        title: "Pass Approved!",
-        description: "Your curfew pass has been approved and is ready to use.",
+        title: "Pass Submitted",
+        description: "Your curfew pass request has been submitted for review.",
       });
-    }, 3000);
+    } else {
+      toast({
+        title: "Error",
+        description: "Failed to submit pass request. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    toast({
+      title: "Signed Out",
+      description: "You have been successfully signed out."
+    });
   };
 
   const getPassStats = () => {
@@ -62,14 +69,29 @@ const Index = ({ passes, onPassSubmission }: IndexProps) => {
               </div>
             </div>
             
-            <Button
-              variant="secondary"
-              onClick={() => navigate("/admin")}
-              className="bg-primary-foreground text-primary hover:bg-primary-foreground/90"
-            >
-              <Settings className="h-4 w-4 mr-2" />
-              Admin Panel
-            </Button>
+            <div className="flex items-center gap-3">
+              <span className="text-primary-foreground/90">
+                Welcome, {profile?.full_name || user?.email}
+              </span>
+              {profile?.role === 'admin' && (
+                <Button
+                  variant="secondary"
+                  onClick={() => navigate("/admin")}
+                  className="bg-primary-foreground text-primary hover:bg-primary-foreground/90"
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  Admin Panel
+                </Button>
+              )}
+              <Button
+                variant="secondary"
+                onClick={handleSignOut}
+                className="bg-primary-foreground text-primary hover:bg-primary-foreground/90"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Sign Out
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -133,7 +155,11 @@ const Index = ({ passes, onPassSubmission }: IndexProps) => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {passes.length === 0 ? (
+                {loading ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <p>Loading passes...</p>
+                  </div>
+                ) : passes.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <FileText className="h-16 w-16 mx-auto mb-4 opacity-50" />
                     <p className="text-lg">No passes requested yet</p>

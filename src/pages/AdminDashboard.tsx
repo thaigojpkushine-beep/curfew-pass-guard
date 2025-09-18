@@ -6,20 +6,30 @@ import { PassManagement } from "@/components/admin/PassManagement";
 import { AdminAnalytics } from "@/components/admin/AdminAnalytics";
 import { VerificationLogs } from "@/components/admin/VerificationLogs";
 import { SystemSettings } from "@/components/admin/SystemSettings";
-import { Pass } from "@/types/Pass";
+import { usePasses } from "@/hooks/usePasses";
+import { useAuth } from "@/contexts/AuthContext";
 
-interface AdminDashboardProps {
-  passes: Pass[];
-  onUpdatePass: (passId: string, updates: Partial<Pass>) => void;
-}
-
-const AdminDashboard = ({ passes, onUpdatePass }: AdminDashboardProps) => {
+const AdminDashboard = () => {
   const [activeView, setActiveView] = useState<string>("overview");
+  const { passes, updatePass } = usePasses();
+  const { profile } = useAuth();
+
+  // Redirect if not admin
+  if (profile?.role !== 'admin') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
+          <p>You don't have permission to access the admin dashboard.</p>
+        </div>
+      </div>
+    );
+  }
 
   const renderContent = () => {
     switch (activeView) {
       case "passes":
-        return <PassManagement passes={passes} onUpdatePass={onUpdatePass} />;
+        return <PassManagement passes={passes} onUpdatePass={updatePass} />;
       case "analytics":
         return <AdminAnalytics passes={passes} />;
       case "verification":

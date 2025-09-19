@@ -179,21 +179,6 @@ const AuthPage = () => {
                       minLength={6}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-role">Account Type</Label>
-                    <Select 
-                      value={signUpForm.role} 
-                      onValueChange={(value) => setSignUpForm({...signUpForm, role: value})}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="user">Regular User</SelectItem>
-                        <SelectItem value="admin">Administrator</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? 'Creating Account...' : 'Create Account'}
                   </Button>

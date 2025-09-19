@@ -183,6 +183,17 @@ const AuthPage = () => {
                     {isLoading ? 'Creating Account...' : 'Create Account'}
                   </Button>
                 </form>
+                
+                <div className="mt-4 text-center">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => navigate('/admin-login')}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    Administrator Access
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

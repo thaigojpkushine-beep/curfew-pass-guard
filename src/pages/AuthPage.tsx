@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,22 @@ const AuthPage = () => {
     email: '',
     password: ''
   });
+
+  // Password recovery flow
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setShowResetPassword(true);
+      }
+    });
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,6 +118,40 @@ const AuthPage = () => {
     setIsLoading(false);
   };
 
+  const handlePasswordUpdate = async (e?: React.FormEvent) => {
+    e?.preventDefault?.();
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: "Passwords do not match",
+        description: "Please ensure both passwords match.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        toast({
+          title: "Update Error",
+          description: error.message,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Password Updated",
+          description: "Your password has been reset. Please sign in."
+        });
+        setShowResetPassword(false);
+        setNewPassword('');
+        setConfirmPassword('');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-muted flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -134,105 +184,150 @@ const AuthPage = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSignIn} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signin-email">Email</Label>
-                    <Input
-                      id="signin-email"
-                      type="email"
-                      value={signInForm.email}
-                      onChange={(e) => setSignInForm({...signInForm, email: e.target.value})}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signin-password">Password</Label>
-                    <Input
-                      id="signin-password"
-                      type="password"
-                      value={signInForm.password}
-                      onChange={(e) => setSignInForm({...signInForm, password: e.target.value})}
-                      required
-                    />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? 'Signing In...' : 'Sign In'}
-                  </Button>
-                </form>
-
-                {!showForgotPassword && !resetSent && (
-                  <div className="mt-4 text-center">
-                    <Button
-                      variant="link"
-                      size="sm"
-                      onClick={() => setShowForgotPassword(true)}
-                      className="text-muted-foreground hover:text-foreground p-0 h-auto"
-                    >
-                      Forgot Password?
-                    </Button>
-                  </div>
-                )}
-
-                {showForgotPassword && !resetSent && (
-                  <div className="mt-6 p-4 border rounded-lg bg-muted/50">
-                    <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
-                      <Mail className="h-4 w-4" />
-                      Reset Password
-                    </h3>
-                    <form onSubmit={handleForgotPassword} className="space-y-3">
+                {showResetPassword ? (
+                  <form onSubmit={handlePasswordUpdate} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="new-password">New Password</Label>
+                      <Input
+                        id="new-password"
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        required
+                        minLength={6}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirm-password">Confirm Password</Label>
+                      <Input
+                        id="confirm-password"
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        required
+                        minLength={6}
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button type="submit" disabled={isLoading || newPassword !== confirmPassword}>
+                        {isLoading ? 'Updating...' : 'Update Password'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setShowResetPassword(false);
+                          setNewPassword('');
+                          setConfirmPassword('');
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <form onSubmit={handleSignIn} className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="reset-email">Email Address</Label>
+                        <Label htmlFor="signin-email">Email</Label>
                         <Input
-                          id="reset-email"
+                          id="signin-email"
                           type="email"
-                          value={resetEmail}
-                          onChange={(e) => setResetEmail(e.target.value)}
-                          placeholder="Enter your email"
+                          value={signInForm.email}
+                          onChange={(e) => setSignInForm({...signInForm, email: e.target.value})}
                           required
                         />
                       </div>
-                      <div className="flex gap-2">
-                        <Button type="submit" size="sm" disabled={isLoading}>
-                          {isLoading ? 'Sending...' : 'Send Reset Link'}
-                        </Button>
+                      <div className="space-y-2">
+                        <Label htmlFor="signin-password">Password</Label>
+                        <Input
+                          id="signin-password"
+                          type="password"
+                          value={signInForm.password}
+                          onChange={(e) => setSignInForm({...signInForm, password: e.target.value})}
+                          required
+                        />
+                      </div>
+                      <Button type="submit" className="w-full" disabled={isLoading}>
+                        {isLoading ? 'Signing In...' : 'Sign In'}
+                      </Button>
+                    </form>
+
+                    {!showForgotPassword && !resetSent && (
+                      <div className="mt-4 text-center">
                         <Button
-                          type="button"
-                          variant="outline"
+                          variant="link"
+                          size="sm"
+                          onClick={() => setShowForgotPassword(true)}
+                          className="text-muted-foreground hover:text-foreground p-0 h-auto"
+                        >
+                          Forgot Password?
+                        </Button>
+                      </div>
+                    )}
+
+                    {showForgotPassword && !resetSent && (
+                      <div className="mt-6 p-4 border rounded-lg bg-muted/50">
+                        <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
+                          <Mail className="h-4 w-4" />
+                          Reset Password
+                        </h3>
+                        <form onSubmit={handleForgotPassword} className="space-y-3">
+                          <div className="space-y-2">
+                            <Label htmlFor="reset-email">Email Address</Label>
+                            <Input
+                              id="reset-email"
+                              type="email"
+                              value={resetEmail}
+                              onChange={(e) => setResetEmail(e.target.value)}
+                              placeholder="Enter your email"
+                              required
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <Button type="submit" size="sm" disabled={isLoading}>
+                              {isLoading ? 'Sending...' : 'Send Reset Link'}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setShowForgotPassword(false);
+                                setResetEmail('');
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </form>
+                      </div>
+                    )}
+
+                    {resetSent && (
+                      <div className="mt-6 p-4 border rounded-lg bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800">
+                        <div className="flex items-center gap-2 text-green-800 dark:text-green-200">
+                          <Mail className="h-4 w-4" />
+                          <span className="text-sm font-medium">Reset Link Sent</span>
+                        </div>
+                        <p className="text-sm text-green-700 dark:text-green-300 mt-2">
+                          If an account exists with this email, you'll receive a reset link.
+                        </p>
+                        <Button
+                          variant="link"
                           size="sm"
                           onClick={() => {
+                            setResetSent(false);
                             setShowForgotPassword(false);
                             setResetEmail('');
                           }}
+                          className="text-green-800 dark:text-green-200 p-0 h-auto mt-2"
                         >
-                          Cancel
+                          Back to Login
                         </Button>
                       </div>
-                    </form>
-                  </div>
-                )}
-
-                {resetSent && (
-                  <div className="mt-6 p-4 border rounded-lg bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800">
-                    <div className="flex items-center gap-2 text-green-800 dark:text-green-200">
-                      <Mail className="h-4 w-4" />
-                      <span className="text-sm font-medium">Reset Link Sent</span>
-                    </div>
-                    <p className="text-sm text-green-700 dark:text-green-300 mt-2">
-                      If an account exists with this email, you'll receive a reset link.
-                    </p>
-                    <Button
-                      variant="link"
-                      size="sm"
-                      onClick={() => {
-                        setResetSent(false);
-                        setShowForgotPassword(false);
-                        setResetEmail('');
-                      }}
-                      className="text-green-800 dark:text-green-200 p-0 h-auto mt-2"
-                    >
-                      Back to Login
-                    </Button>
-                  </div>
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>

@@ -6,9 +6,8 @@ import { Button } from "@/components/ui/button";
 import PassRequestForm from "@/components/PassRequestForm";
 import PassCard from "@/components/PassCard";
 import QRDisplay from "@/components/QRDisplay";
-import QRScanner from "@/components/QRScanner";
 import { Pass, PassFormData } from "@/types/Pass";
-import { FileText, Scan, ClipboardList, Shield, Settings, LogOut } from "lucide-react";
+import { FileText, ClipboardList, Shield, Settings, LogOut } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -127,7 +126,7 @@ const Index = () => {
 
         {/* Main Tabs */}
         <Tabs defaultValue="request" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 lg:w-96 mx-auto">
+          <TabsList className="grid w-full grid-cols-2 lg:w-96 mx-auto">
             <TabsTrigger value="request" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
               Request Pass
@@ -135,10 +134,6 @@ const Index = () => {
             <TabsTrigger value="passes" className="flex items-center gap-2">
               <ClipboardList className="h-4 w-4" />
               My Passes
-            </TabsTrigger>
-            <TabsTrigger value="scanner" className="flex items-center gap-2">
-              <Scan className="h-4 w-4" />
-              Verify Pass
             </TabsTrigger>
           </TabsList>
 
@@ -180,9 +175,6 @@ const Index = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="scanner" className="space-y-6">
-            <QRScanner />
-          </TabsContent>
         </Tabs>
       </div>
 

@@ -1,73 +1,112 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, ScanLine, CheckCircle, XCircle, Clock, MapPin } from "lucide-react";
+import { Search, CheckCircle, XCircle, AlertCircle, Activity } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { format } from "date-fns";
 
 interface VerificationLog {
   id: string;
-  passId: string;
-  holderName: string;
-  scanTime: Date;
-  location: string;
-  scannedBy: string;
+  pass_id: string;
+  scan_time: string;
+  location: string | null;
   result: 'valid' | 'expired' | 'invalid';
-  deviceInfo: string;
+  device_info: string | null;
+  passes?: {
+    full_name: string;
+    id_number: string;
+  };
+  profiles?: {
+    full_name: string;
+  };
 }
 
-// Mock verification logs data
-const mockLogs: VerificationLog[] = [
-  {
-    id: "VL-001",
-    passId: "PASS-1734523234567",
-    holderName: "John Doe",
-    scanTime: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
-    location: "Checkpoint Alpha - Main Street",
-    scannedBy: "Officer Smith",
-    result: 'valid',
-    deviceInfo: "Mobile Scanner #12"
-  },
-  {
-    id: "VL-002", 
-    passId: "PASS-1734523298745",
-    holderName: "Jane Smith",
-    scanTime: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-    location: "Checkpoint Beta - City Center",
-    scannedBy: "Officer Johnson",
-    result: 'expired',
-    deviceInfo: "Fixed Scanner #5"
-  },
-  {
-    id: "VL-003",
-    passId: "PASS-1734523312890",
-    holderName: "Mike Wilson",
-    scanTime: new Date(Date.now() - 1000 * 60 * 60 * 4), // 4 hours ago
-    location: "Checkpoint Gamma - Airport",
-    scannedBy: "Security Guard Adams",
-    result: 'valid',
-    deviceInfo: "Mobile Scanner #8"
-  },
-  {
-    id: "VL-004",
-    passId: "INVALID-CODE",
-    holderName: "Unknown",
-    scanTime: new Date(Date.now() - 1000 * 60 * 60 * 6), // 6 hours ago
-    location: "Checkpoint Alpha - Main Street", 
-    scannedBy: "Officer Brown",
-    result: 'invalid',
-    deviceInfo: "Mobile Scanner #12"
-  }
-];
-
-export function VerificationLogs() {
+export const VerificationLogs = () => {
   const [searchTerm, setSearchTerm] = useState("");
-  
-  const filteredLogs = mockLogs.filter((log) =>
-    log.holderName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.passId.includes(searchTerm) ||
-    log.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.scannedBy.toLowerCase().includes(searchTerm.toLowerCase())
+  const [logs, setLogs] = useState<VerificationLog[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchLogs();
+    
+    // Set up realtime subscription
+    const channel = supabase
+      .channel('verification_logs_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'verification_logs'
+        },
+        () => {
+          fetchLogs();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const fetchLogs = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('verification_logs')
+        .select(`
+          id,
+          pass_id,
+          scan_time,
+          location,
+          result,
+          device_info,
+          scanned_by,
+          passes!verification_logs_pass_id_fkey (full_name, id_number)
+        `)
+        .order('scan_time', { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+      
+      // Fetch scanner profiles separately
+      const logsWithScanners = await Promise.all((data || []).map(async (log) => {
+        let scannerName = 'System';
+        if (log.scanned_by) {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('user_id', log.scanned_by)
+            .single();
+          scannerName = profileData?.full_name || 'System';
+        }
+        
+        return {
+          id: log.id,
+          pass_id: log.pass_id,
+          scan_time: log.scan_time,
+          location: log.location,
+          result: log.result as 'valid' | 'expired' | 'invalid',
+          device_info: log.device_info,
+          passes: log.passes,
+          profiles: { full_name: scannerName }
+        };
+      }));
+
+      setLogs(logsWithScanners);
+    } catch (error) {
+      console.error('Error fetching verification logs:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredLogs = logs.filter(log => 
+    log.pass_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    log.passes?.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    log.location?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getResultBadge = (result: VerificationLog['result']) => {
@@ -81,15 +120,15 @@ export function VerificationLogs() {
         );
       case 'expired':
         return (
-          <Badge className="bg-warning text-warning-foreground">
-            <Clock className="h-3 w-3 mr-1" />
+          <Badge className="bg-destructive text-destructive-foreground">
+            <XCircle className="h-3 w-3 mr-1" />
             Expired
           </Badge>
         );
       case 'invalid':
         return (
-          <Badge className="bg-destructive text-destructive-foreground">
-            <XCircle className="h-3 w-3 mr-1" />
+          <Badge variant="destructive">
+            <AlertCircle className="h-3 w-3 mr-1" />
             Invalid
           </Badge>
         );
@@ -97,135 +136,139 @@ export function VerificationLogs() {
   };
 
   const stats = {
-    total: mockLogs.length,
-    valid: mockLogs.filter(log => log.result === 'valid').length,
-    expired: mockLogs.filter(log => log.result === 'expired').length,
-    invalid: mockLogs.filter(log => log.result === 'invalid').length,
+    total: logs.length,
+    valid: logs.filter(log => log.result === 'valid').length,
+    expired: logs.filter(log => log.result === 'expired').length,
+    invalid: logs.filter(log => log.result === 'invalid').length,
   };
 
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div>
+        <h1 className="text-3xl font-bold">Verification Logs</h1>
+        <p className="text-muted-foreground">Track all pass verification scans</p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-4">
         <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-primary">{stats.total}</div>
-            <div className="text-sm text-muted-foreground">Total Scans</div>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Scans</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.total}</div>
           </CardContent>
         </Card>
+
         <Card>
-          <CardContent className="p-4 text-center">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Valid</CardTitle>
+            <CheckCircle className="h-4 w-4 text-success" />
+          </CardHeader>
+          <CardContent>
             <div className="text-2xl font-bold text-success">{stats.valid}</div>
-            <div className="text-sm text-muted-foreground">Valid Passes</div>
           </CardContent>
         </Card>
+
         <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-warning">{stats.expired}</div>
-            <div className="text-sm text-muted-foreground">Expired Passes</div>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Expired</CardTitle>
+            <XCircle className="h-4 w-4 text-destructive" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-destructive">{stats.expired}</div>
           </CardContent>
         </Card>
+
         <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-destructive">{stats.invalid}</div>
-            <div className="text-sm text-muted-foreground">Invalid Codes</div>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Invalid</CardTitle>
+            <AlertCircle className="h-4 w-4 text-warning" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-warning">{stats.invalid}</div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Verification Logs Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ScanLine className="h-5 w-5" />
-            Verification Logs
-            <Badge variant="outline">{filteredLogs.length} records</Badge>
-          </CardTitle>
-          
-          {/* Search */}
-          <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search logs..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9"
-            />
+          <CardTitle>Recent Verifications</CardTitle>
+          <div className="mt-4">
+            <div className="relative">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by pass ID, holder name, or location..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8"
+              />
+            </div>
           </div>
         </CardHeader>
-
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Pass ID</TableHead>
-                <TableHead>Pass Holder</TableHead>
-                <TableHead>Scan Time</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Scanned By</TableHead>
-                <TableHead>Result</TableHead>
-                <TableHead>Device</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredLogs.map((log) => (
-                <TableRow key={log.id}>
-                  <TableCell className="font-mono text-sm">
-                    {log.passId}
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium">{log.holderName}</div>
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    <div>{log.scanTime.toLocaleDateString()}</div>
-                    <div className="text-muted-foreground">
-                      {log.scanTime.toLocaleTimeString()}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1 text-sm">
-                      <MapPin className="h-3 w-3 text-muted-foreground" />
-                      {log.location}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {log.scannedBy}
-                  </TableCell>
-                  <TableCell>
-                    {getResultBadge(log.result)}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {log.deviceInfo}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          
-          {filteredLogs.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              No verification logs found matching your search
+          {loading ? (
+            <div className="text-center py-8">Loading verification logs...</div>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Pass ID</TableHead>
+                    <TableHead>Pass Holder</TableHead>
+                    <TableHead>Scan Time</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Scanned By</TableHead>
+                    <TableHead>Result</TableHead>
+                    <TableHead>Device</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredLogs.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        No verification logs found
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredLogs.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell className="font-mono text-sm">
+                          {log.pass_id.substring(0, 8)}...
+                        </TableCell>
+                        <TableCell>{log.passes?.full_name || 'Unknown'}</TableCell>
+                        <TableCell>
+                          {format(new Date(log.scan_time), 'MMM dd, yyyy HH:mm:ss')}
+                        </TableCell>
+                        <TableCell>{log.location || 'Not specified'}</TableCell>
+                        <TableCell>{log.profiles?.full_name || 'System'}</TableCell>
+                        <TableCell>{getResultBadge(log.result)}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">
+                          {log.device_info || 'Unknown'}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Real-time Activity Indicator */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5 text-primary animate-pulse" />
             Live Verification Activity
-            <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8 text-muted-foreground">
-            <ScanLine className="h-16 w-16 mx-auto mb-4 opacity-20" />
-            <p>Monitoring checkpoint activities...</p>
-            <p className="text-sm">Last scan: {mockLogs[0].scanTime.toLocaleTimeString()}</p>
-          </div>
+          <p className="text-sm text-muted-foreground">
+            Real-time updates enabled. New verifications will appear automatically.
+          </p>
         </CardContent>
       </Card>
     </div>
   );
-}
+};

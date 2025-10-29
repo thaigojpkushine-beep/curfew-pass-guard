@@ -63,6 +63,54 @@ export function PassManagement({ passes, onUpdatePass }: PassManagementProps) {
     }
   };
 
+  const handleExport = () => {
+    const csvHeaders = [
+      'Pass ID',
+      'Full Name',
+      'ID Number',
+      'Reason',
+      'Destination',
+      'Start Time',
+      'End Time',
+      'Status',
+      'Created At',
+      'Approved At'
+    ];
+
+    const csvRows = filteredPasses.map(pass => [
+      pass.id,
+      pass.fullName,
+      pass.idNumber,
+      pass.reason,
+      pass.destination,
+      pass.startTime,
+      pass.endTime,
+      pass.status,
+      pass.createdAt.toISOString(),
+      pass.approvedAt?.toISOString() || 'N/A'
+    ]);
+
+    const csvContent = [
+      csvHeaders.join(','),
+      ...csvRows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `curfew_passes_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({
+      title: "Export Successful",
+      description: `Exported ${filteredPasses.length} passes to CSV`,
+    });
+  };
+
   const stats = {
     total: passes.length,
     pending: passes.filter(p => p.status === 'pending').length,
@@ -134,7 +182,7 @@ export function PassManagement({ passes, onUpdatePass }: PassManagementProps) {
               </SelectContent>
             </Select>
 
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={handleExport}>
               <Download className="h-4 w-4 mr-2" />
               Export
             </Button>

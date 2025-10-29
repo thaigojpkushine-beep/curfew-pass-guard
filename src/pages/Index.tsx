@@ -16,7 +16,7 @@ import { usePasses } from "@/hooks/usePasses";
 const Index = () => {
   const [selectedPass, setSelectedPass] = useState<Pass | null>(null);
   const navigate = useNavigate();
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, isAdmin, signOut } = useAuth();
   const { passes, loading, createPass } = usePasses();
 
   const handlePassSubmission = async (formData: PassFormData) => {
@@ -72,7 +72,7 @@ const Index = () => {
               <span className="text-primary-foreground/90">
                 Welcome, {profile?.full_name || user?.email}
               </span>
-              {profile?.role === 'admin' && (
+              {isAdmin && (
                 <Button
                   variant="secondary"
                   onClick={() => navigate("/admin")}

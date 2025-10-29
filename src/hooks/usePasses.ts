@@ -6,7 +6,7 @@ import { Pass, PassFormData } from '@/types/Pass';
 export const usePasses = () => {
   const [passes, setPasses] = useState<Pass[]>([]);
   const [loading, setLoading] = useState(true);
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
 
   useEffect(() => {
     if (user) {
@@ -15,17 +15,26 @@ export const usePasses = () => {
       setPasses([]);
       setLoading(false);
     }
-  }, [user, profile]);
+  }, [user]);
 
   const fetchPasses = async () => {
+    if (!user) return;
+    
     try {
       setLoading(true);
+      
+      // Check if user is admin by querying user_roles
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .single();
       
       let query = supabase.from('passes').select('*');
       
       // If admin, get all passes; if user, get only their passes
-      if (profile?.role !== 'admin') {
-        query = query.eq('user_id', user?.id);
+      if (roleData?.role !== 'admin') {
+        query = query.eq('user_id', user.id);
       }
       
       const { data, error } = await query.order('created_at', { ascending: false });

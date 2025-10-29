@@ -11,10 +11,19 @@ interface Profile {
   updated_at: string;
 }
 
+interface UserRole {
+  id: string;
+  user_id: string;
+  role: 'admin' | 'user';
+  created_at: string;
+}
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
+  userRole: UserRole | null;
+  isAdmin: boolean;
   loading: boolean;
   signUp: (email: string, password: string, fullName: string, role?: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
@@ -35,6 +44,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,19 +55,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Fetch user profile
+          // Fetch user profile and role
           setTimeout(async () => {
-            const { data: profileData } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('user_id', session.user.id)
-              .single();
+            const [profileResult, roleResult] = await Promise.all([
+              supabase.from('profiles').select('*').eq('user_id', session.user.id).single(),
+              supabase.from('user_roles').select('*').eq('user_id', session.user.id).single()
+            ]);
             
-            setProfile(profileData);
+            setProfile(profileResult.data);
+            setUserRole(roleResult.data);
             setLoading(false);
           }, 0);
         } else {
           setProfile(null);
+          setUserRole(null);
           setLoading(false);
         }
       }
@@ -70,13 +81,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (session?.user) {
         setTimeout(async () => {
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('user_id', session.user.id)
-            .single();
+          const [profileResult, roleResult] = await Promise.all([
+            supabase.from('profiles').select('*').eq('user_id', session.user.id).single(),
+            supabase.from('user_roles').select('*').eq('user_id', session.user.id).single()
+          ]);
           
-          setProfile(profileData);
+          setProfile(profileResult.data);
+          setUserRole(roleResult.data);
           setLoading(false);
         }, 0);
       } else {
@@ -118,10 +129,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await supabase.auth.signOut();
   };
 
+  const isAdmin = userRole?.role === 'admin';
+
   const value = {
     user,
     session,
     profile,
+    userRole,
+    isAdmin,
     loading,
     signUp,
     signIn,

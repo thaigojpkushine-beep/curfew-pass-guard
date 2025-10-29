@@ -12,10 +12,10 @@ import { useAuth } from "@/contexts/AuthContext";
 const AdminDashboard = () => {
   const [activeView, setActiveView] = useState<string>("overview");
   const { passes, updatePass } = usePasses();
-  const { profile } = useAuth();
+  const { profile, isAdmin } = useAuth();
 
   // Redirect if not admin
-  if (profile?.role !== 'admin') {
+  if (!isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

@@ -4,6 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Scan, Camera, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/hooks/use-toast";
 
 interface ScanResult {
   id: string;
@@ -15,11 +18,26 @@ interface ScanResult {
 }
 
 const QRScanner = () => {
+  const { user } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [error, setError] = useState<string>("");
   const scannerRef = useRef<QrScanner | null>(null);
+
+  const logVerification = async (passId: string, result: 'valid' | 'expired' | 'invalid') => {
+    try {
+      await supabase.from('verification_logs').insert({
+        pass_id: passId,
+        scanned_by: user?.id,
+        result,
+        location: 'Web Scanner',
+        device_info: navigator.userAgent
+      });
+    } catch (error) {
+      console.error('Error logging verification:', error);
+    }
+  };
 
   const startScanning = async () => {
     if (!videoRef.current) return;
@@ -31,32 +49,67 @@ const QRScanner = () => {
 
       scannerRef.current = new QrScanner(
         videoRef.current,
-        (result) => {
+        async (scanData) => {
           try {
-            const data = JSON.parse(result.data);
+            const data = JSON.parse(scanData.data);
             
             // Validate pass data
             if (!data.id || !data.fullName || !data.startTime || !data.endTime) {
               throw new Error("Invalid pass data");
             }
 
-            // Check if pass is still valid
-            const now = new Date();
-            const startTime = new Date(data.startTime);
-            const endTime = new Date(data.endTime);
-            
-            let status = data.status;
-            if (now > endTime) {
-              status = 'expired';
+            // Fetch pass from database to verify
+            const { data: passData, error: passError } = await supabase
+              .from('passes')
+              .select('*')
+              .eq('id', data.id)
+              .single();
+
+            if (passError || !passData) {
+              setError("Pass not found in database");
+              await logVerification(data.id, 'invalid');
+              return;
             }
 
+            // Check if pass is still valid
+            const now = new Date();
+            const startTime = new Date(passData.start_time);
+            const endTime = new Date(passData.end_time);
+            
+            let status = passData.status;
+            let verificationResult: 'valid' | 'expired' | 'invalid' = 'invalid';
+
+            if (passData.status !== 'approved') {
+              verificationResult = 'invalid';
+            } else if (now > endTime) {
+              status = 'expired';
+              verificationResult = 'expired';
+            } else if (now >= startTime && now <= endTime) {
+              verificationResult = 'valid';
+            }
+
+            // Log the verification
+            await logVerification(data.id, verificationResult);
+
             setScanResult({
-              ...data,
+              id: passData.id,
+              fullName: passData.full_name,
+              idNumber: passData.id_number,
+              startTime: passData.start_time,
+              endTime: passData.end_time,
               status
             });
+
+            toast({
+              title: `Pass ${verificationResult.toUpperCase()}`,
+              description: `Verification logged successfully`,
+              variant: verificationResult === 'valid' ? 'default' : 'destructive'
+            });
+
             stopScanning();
           } catch (err) {
             setError("Invalid QR code or pass data");
+            console.error('Scan error:', err);
           }
         },
         {
@@ -88,8 +141,6 @@ const QRScanner = () => {
   }, []);
 
   const getStatusDisplay = (status: string) => {
-    const now = new Date();
-    
     switch (status) {
       case 'approved':
         return {

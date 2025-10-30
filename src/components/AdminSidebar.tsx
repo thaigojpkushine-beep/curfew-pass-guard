@@ -1,4 +1,4 @@
-import { Shield, BarChart3, ClipboardList, ScanLine, Settings } from "lucide-react";
+import { Shield, BarChart3, ClipboardList, ScanLine, Settings, Users } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -19,6 +19,7 @@ interface AdminSidebarProps {
 const menuItems = [
   { id: "overview", title: "Overview", icon: BarChart3 },
   { id: "passes", title: "Pass Management", icon: ClipboardList },
+  { id: "users", title: "User Management", icon: Users },
   { id: "verification", title: "Verification Logs", icon: ScanLine },
   { id: "analytics", title: "Analytics", icon: BarChart3 },
   { id: "settings", title: "System Settings", icon: Settings },

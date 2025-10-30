@@ -6,6 +6,7 @@ import { PassManagement } from "@/components/admin/PassManagement";
 import { AdminAnalytics } from "@/components/admin/AdminAnalytics";
 import { VerificationLogs } from "@/components/admin/VerificationLogs";
 import { SystemSettings } from "@/components/admin/SystemSettings";
+import { UserManagement } from "@/components/admin/UserManagement";
 import { usePasses } from "@/hooks/usePasses";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -30,6 +31,8 @@ const AdminDashboard = () => {
     switch (activeView) {
       case "passes":
         return <PassManagement passes={passes} onUpdatePass={updatePass} />;
+      case "users":
+        return <UserManagement />;
       case "analytics":
         return <AdminAnalytics passes={passes} />;
       case "verification":
